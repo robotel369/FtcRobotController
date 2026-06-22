@@ -19,9 +19,9 @@ public class PIDFTuningOpMode extends LinearOpMode {
     double targetVelocity = 0;
     
     // Tuning Parameters (Software PIDF)
-    double kP = 0.0005; // Proportional
-    double kD = 0.0001; // Derivative
-    double kF = 0.0005; // Feedforward
+    double kP = 0.02; // Proportional
+    double kD = 0.0000; // Derivative
+    double kF = 0.00085; // Feedforward
     double increment = 0.0001;
 
     // Velocity Filtering (to prevent clicking)

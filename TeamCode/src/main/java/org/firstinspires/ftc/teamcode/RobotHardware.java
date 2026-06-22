@@ -82,17 +82,12 @@ public class RobotHardware {
         leftShootMotor.setDirection(DcMotor.Direction.FORWARD);
         rightShootMotor.setDirection(DcMotor.Direction.REVERSE);
 
-        // Enable RUN_USING_ENCODER for PID Velocity control
-        leftShootMotor.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
-        rightShootMotor.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
+        // Use RUN_WITHOUT_ENCODER to bypass Hub PID for maximum software control
+        leftShootMotor.setMode(DcMotor.RunMode.RUN_WITHOUT_ENCODER);
+        rightShootMotor.setMode(DcMotor.RunMode.RUN_WITHOUT_ENCODER);
 
         leftShootMotor.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.FLOAT);
         rightShootMotor.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.FLOAT);
-
-        // Optional: Tune PIDF Coefficients for "Quicker" response
-        // P=10, I=3, D=0, F=12 is a common starting point for shooters
-        // leftShootMotor.setVelocityPIDFCoefficients(10, 3, 0, 12);
-        // rightShootMotor.setVelocityPIDFCoefficients(10, 3, 0, 12);
 
         // Gate Servo
         leftGateServo = myOpMode.hardwareMap.get(Servo.class, "leftGateServo");
@@ -158,14 +153,6 @@ public class RobotHardware {
     public void setIntakePower(double power) {
         leftIntake.setPower(power);
         rightIntake.setPower(power);
-    }
-
-    /**
-     * Set the velocity for the shooter motors in ticks per second.
-     */
-    public void setShooterVelocity(double ticksPerSecond) {
-        leftShootMotor.setVelocity(ticksPerSecond);
-        rightShootMotor.setVelocity(ticksPerSecond);
     }
 
     /**

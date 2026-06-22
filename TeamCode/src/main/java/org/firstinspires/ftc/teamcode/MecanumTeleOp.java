@@ -31,11 +31,6 @@ public class MecanumTeleOp extends LinearOpMode {
 
             // 2. SHOOTER: Manual (Dpad) or Macro (Circle/B)
             double shooterTargetVel = 0;
-            if (gamepad1.dpad_left) {
-                shooterTargetVel = ShooterMechanism.VEL_LOW;
-            } else if (gamepad1.dpad_right) {
-                shooterTargetVel = ShooterMechanism.VEL_HIGH;
-            }
 
             if (gamepad1.b) {
                 shooter.startSequence();
