@@ -8,6 +8,8 @@ public class MecanumTeleOp extends LinearOpMode {
 
     // Create a RobotHardware object
     RobotHardware robot = new RobotHardware(this);
+    // Create a ShooterMechanism object
+    ShooterMechanism shooter = new ShooterMechanism(robot);
 
     @Override
     public void runOpMode() {
@@ -27,22 +29,28 @@ public class MecanumTeleOp extends LinearOpMode {
             
             robot.driveRobot(axial, lateral, yaw);
 
-            // 2. INTAKE: Control using triggers with 0.05 deadzone
+            // 2. SHOOTER: Manual (Dpad) or Macro (Circle/B)
+            double shooterTargetVel = 0;
+            if (gamepad1.dpad_left) {
+                shooterTargetVel = ShooterMechanism.VEL_LOW;
+            } else if (gamepad1.dpad_right) {
+                shooterTargetVel = ShooterMechanism.VEL_HIGH;
+            }
+
+            if (gamepad1.b) {
+                shooter.startSequence();
+            }
+
+            // Update shooter PID state machine
+            double macroIntake = shooter.update(shooterTargetVel);
+
+            // 3. INTAKE: Control using triggers or Macro
             double rt = (gamepad1.right_trigger > 0.05) ? gamepad1.right_trigger : 0;
             double lt = (gamepad1.left_trigger > 0.05) ? gamepad1.left_trigger : 0;
-            double intakePower = rt - lt;
             
+            // Use macro power if busy, otherwise use triggers
+            double intakePower = shooter.isBusy() ? macroIntake : (rt - lt);
             robot.setIntakePower(intakePower);
-
-            // 3. SHOOTER: Control using Dpad (Left = 30%, Right = 60%, Otherwise Off)
-            double shooterPower = 0;
-            if (gamepad1.dpad_left) {
-                shooterPower = 0.3;
-            } else if (gamepad1.dpad_right) {
-                shooterPower = 0.6;
-            }
-            
-            robot.setShooterPower(shooterPower);
 
             // 4. PINPOINT: Update and show acceleration
             robot.updatePinpoint();
@@ -50,13 +58,15 @@ public class MecanumTeleOp extends LinearOpMode {
             // Telemetry
             telemetry.addData("Status", "Running");
             telemetry.addData("Intake Power", "%.2f", intakePower);
-            telemetry.addData("Shooter Power", "%.2f", shooterPower);
+            telemetry.addData("Shooter Target Vel", "%.0f", shooterTargetVel);
+            telemetry.addData("Flywheel Speed", "%.0f", shooter.getFlywheelSpeed());
             telemetry.addLine("--- Pinpoint Data (Inches) ---");
             telemetry.addData("X Position", "%.2f", robot.getPosX());
             telemetry.addData("Y Position", "%.2f", robot.getPosY());
             telemetry.addData("Heading", "%.2f°", robot.getHeading());
-            telemetry.addData("Front/Back Accel", "%.2f in/s^2", robot.getXAcceleration());
-            telemetry.addData("Lateral Accel", "%.2f in/s^2", robot.getYAcceleration());
+            telemetry.addLine("--- Robot Velocity (in/s) ---");
+            telemetry.addData("X Velocity", "%.2f", robot.getVelX());
+            telemetry.addData("Y Velocity", "%.2f", robot.getVelY());
             telemetry.update();
         }
     }

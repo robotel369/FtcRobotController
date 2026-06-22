@@ -1,8 +1,11 @@
 package org.firstinspires.ftc.teamcode;
 
 import com.qualcomm.hardware.gobilda.GoBildaPinpointDriver;
+import com.qualcomm.hardware.rev.RevHubOrientationOnRobot;
 import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
 import com.qualcomm.robotcore.hardware.DcMotor;
+import com.qualcomm.robotcore.hardware.DcMotorEx;
+import com.qualcomm.robotcore.hardware.IMU;
 import com.qualcomm.robotcore.hardware.Servo;
 import com.qualcomm.robotcore.util.ElapsedTime;
 import org.firstinspires.ftc.robotcore.external.navigation.DistanceUnit;
@@ -27,8 +30,8 @@ public class RobotHardware {
     public DcMotor rightIntake  = null;
 
     // Shooter Motors
-    public DcMotor leftShootMotor  = null;
-    public DcMotor rightShootMotor = null;
+    public DcMotorEx leftShootMotor  = null;
+    public DcMotorEx rightShootMotor = null;
 
     // Gate Servo
     public Servo leftGateServo = null;
@@ -36,20 +39,15 @@ public class RobotHardware {
     // Pinpoint Odometry
     public GoBildaPinpointDriver pinpoint = null;
 
+    // Internal IMU
+    public IMU imu = null;
+
     // Acceleration calculation
     private double lastXVel = 0;
     private double lastYVel = 0;
     private ElapsedTime accelTimer = new ElapsedTime();
     private double xAccel = 0;
     private double yAccel = 0;
-
-    // Constants for easy tuning
-    public static final double GATE_CLOSED = 0.09;
-    public static final double GATE_OPEN   = 0.2;
-    public static final long   SHOOT_DELAY_MS = 2000; // Time for motors to spin up
-
-    private ElapsedTime shooterTimer = new ElapsedTime();
-    private boolean shooterActive = false;
 
     public RobotHardware (LinearOpMode opmode) {
         myOpMode = opmode;
@@ -78,15 +76,35 @@ public class RobotHardware {
         rightIntake.setDirection(DcMotor.Direction.FORWARD);
 
         // Shooter Motors
-        leftShootMotor  = myOpMode.hardwareMap.get(DcMotor.class, "leftShootMotor");
-        rightShootMotor = myOpMode.hardwareMap.get(DcMotor.class, "rightShootMotor");
+        leftShootMotor  = myOpMode.hardwareMap.get(DcMotorEx.class, "leftShootMotor");
+        rightShootMotor = myOpMode.hardwareMap.get(DcMotorEx.class, "rightShootMotor");
 
         leftShootMotor.setDirection(DcMotor.Direction.FORWARD);
         rightShootMotor.setDirection(DcMotor.Direction.REVERSE);
 
+        // Enable RUN_USING_ENCODER for PID Velocity control
+        leftShootMotor.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
+        rightShootMotor.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
+
+        // Optional: Tune PIDF Coefficients for "Quicker" response
+        // P=10, I=3, D=0, F=12 is a common starting point for shooters
+        // leftShootMotor.setVelocityPIDFCoefficients(10, 3, 0, 12);
+        // rightShootMotor.setVelocityPIDFCoefficients(10, 3, 0, 12);
+
         // Gate Servo
         leftGateServo = myOpMode.hardwareMap.get(Servo.class, "leftGateServo");
-        leftGateServo.setPosition(GATE_CLOSED);
+        leftGateServo.setPosition(0.09); // Default closed position
+
+        // Internal IMU initialization
+        try {
+            imu = myOpMode.hardwareMap.get(IMU.class, "imu");
+            RevHubOrientationOnRobot.LogoFacingDirection logoDirection = RevHubOrientationOnRobot.LogoFacingDirection.UP;
+            RevHubOrientationOnRobot.UsbFacingDirection  usbDirection  = RevHubOrientationOnRobot.UsbFacingDirection.FORWARD;
+            RevHubOrientationOnRobot orientationOnRobot = new RevHubOrientationOnRobot(logoDirection, usbDirection);
+            imu.initialize(new IMU.Parameters(orientationOnRobot));
+        } catch (Exception e) {
+            myOpMode.telemetry.addData("IMU", "Not found or error: " + e.getMessage());
+        }
 
         // Pinpoint initialization
         try {
@@ -140,31 +158,11 @@ public class RobotHardware {
     }
 
     /**
-     * Set the power for the shooter motors and handle the gate servo logic.
-     * This should be called every loop in TeleOp.
+     * Set the velocity for the shooter motors in ticks per second.
      */
-    public void setShooterPower(double power) {
-        leftShootMotor.setPower(power);
-        rightShootMotor.setPower(power);
-
-        if (power > 0) {
-            // If we just started shooting, reset the timer
-            if (!shooterActive) {
-                shooterTimer.reset();
-                shooterActive = true;
-            }
-            
-            // After the delay, open the gate
-            if (shooterTimer.milliseconds() >= SHOOT_DELAY_MS) {
-                leftGateServo.setPosition(GATE_OPEN);
-            } else {
-                leftGateServo.setPosition(GATE_CLOSED);
-            }
-        } else {
-            // Power is 0, close the gate immediately
-            leftGateServo.setPosition(GATE_CLOSED);
-            shooterActive = false;
-        }
+    public void setShooterVelocity(double ticksPerSecond) {
+        leftShootMotor.setVelocity(ticksPerSecond);
+        rightShootMotor.setVelocity(ticksPerSecond);
     }
 
     /**
@@ -192,6 +190,9 @@ public class RobotHardware {
 
     public double getXAcceleration() { return xAccel; }
     public double getYAcceleration() { return yAccel; }
+
+    public double getVelX() { return (pinpoint != null) ? pinpoint.getVelX(DistanceUnit.INCH) : 0; }
+    public double getVelY() { return (pinpoint != null) ? pinpoint.getVelY(DistanceUnit.INCH) : 0; }
     
     public double getPosX() { return (pinpoint != null) ? pinpoint.getPosX(DistanceUnit.INCH) : 0; }
     public double getPosY() { return (pinpoint != null) ? pinpoint.getPosY(DistanceUnit.INCH) : 0; }
