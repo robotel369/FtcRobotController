@@ -86,6 +86,9 @@ public class RobotHardware {
         leftShootMotor.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
         rightShootMotor.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
 
+        leftShootMotor.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.FLOAT);
+        rightShootMotor.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.FLOAT);
+
         // Optional: Tune PIDF Coefficients for "Quicker" response
         // P=10, I=3, D=0, F=12 is a common starting point for shooters
         // leftShootMotor.setVelocityPIDFCoefficients(10, 3, 0, 12);
