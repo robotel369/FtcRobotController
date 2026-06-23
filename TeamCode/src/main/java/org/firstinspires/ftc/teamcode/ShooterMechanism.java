@@ -18,7 +18,7 @@ public class ShooterMechanism {
     public static final long   INTAKE_MS   = 1300;
 
     // Velocity Targets (Ticks per second)
-    public static final double VEL_MACRO = 500;
+    public static final double VEL_MACRO = 400;
     public static final double VEL_THRESHOLD = 0.95; // 95% of target
 
     // PIDF Coefficients (Tuned Values)
