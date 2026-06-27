@@ -6,6 +6,7 @@ import com.qualcomm.robotcore.util.Range;
 
 /**
  * This class handles the shooter macro and manual control using a custom software PIDF.
+ * Includes linear interpolation for distance-based velocity.
  */
 public class ShooterMechanism {
     private RobotHardware robot;
@@ -13,13 +14,37 @@ public class ShooterMechanism {
     // Constants for easy tuning
     public static final double GATE_CLOSED = 0.09;
     public static final double GATE_OPEN   = 0.2;
-    public static final long   SPIN_UP_MS  = 1;
     public static final long   GATE_WAIT_MS = 300; 
     public static final long   INTAKE_MS   = 1300;
 
-    // Velocity Targets (Ticks per second)
-    public static final double VEL_MACRO = 400;
+    // Velocity Calibration Threshold
     public static final double VEL_THRESHOLD = 0.95; // 95% of target
+
+    // Linear Interpolation Table (Distance in inches, Velocity in ticks/sec)
+    // Every 5 inches, velocity increases by 20 ticks/sec as placeholder
+    private static final double[][] VELOCITY_TABLE = {
+        {0,   400},
+        {5,   420},
+        {10,  440},
+        {15,  460},
+        {20,  480},
+        {25,  500},
+        {30,  520},
+        {35,  540},
+        {40,  560},
+        {45,  580},
+        {50,  600},
+        {55,  620},
+        {60,  640},
+        {65,  660},
+        {70,  680},
+        {75,  700},
+        {80,  720},
+        {85,  740},
+        {90,  760},
+        {95,  780},
+        {100, 800}
+    };
 
     // PIDF Coefficients (Tuned Values)
     private static final double kP = 0.02;
@@ -47,14 +72,41 @@ public class ShooterMechanism {
 
     private State currentState = State.IDLE;
     private ElapsedTime stateTimer = new ElapsedTime();
+    private double currentMacroTarget = 0;
 
     public ShooterMechanism(RobotHardware robot) {
         this.robot = robot;
         timer.reset();
     }
 
-    public void startSequence() {
+    /**
+     * Calculates the target velocity based on distance using linear interpolation.
+     * @param distance Distance to the goal in inches.
+     * @return Target velocity in ticks/second.
+     */
+    public double getInterpolatedVelocity(double distance) {
+        // Handle out-of-bounds distances
+        if (distance <= VELOCITY_TABLE[0][0]) return VELOCITY_TABLE[0][1];
+        if (distance >= VELOCITY_TABLE[VELOCITY_TABLE.length - 1][0]) return VELOCITY_TABLE[VELOCITY_TABLE.length - 1][1];
+
+        // Find the interval
+        for (int i = 0; i < VELOCITY_TABLE.length - 1; i++) {
+            if (distance >= VELOCITY_TABLE[i][0] && distance <= VELOCITY_TABLE[i+1][0]) {
+                double dist0 = VELOCITY_TABLE[i][0];
+                double dist1 = VELOCITY_TABLE[i+1][0];
+                double vel0  = VELOCITY_TABLE[i][1];
+                double vel1  = VELOCITY_TABLE[i+1][1];
+
+                // Linear Interpolation Formula: y = y0 + (x - x0) * (y1 - y0) / (x1 - x0)
+                return vel0 + (distance - dist0) * (vel1 - vel0) / (dist1 - dist0);
+            }
+        }
+        return VELOCITY_TABLE[0][1]; // Fallback
+    }
+
+    public void startSequence(double distance) {
         if (currentState == State.IDLE) {
+            currentMacroTarget = getInterpolatedVelocity(distance);
             currentState = State.MACRO_SPIN_UP;
             stateTimer.reset();
         }
@@ -62,13 +114,9 @@ public class ShooterMechanism {
 
     /**
      * Internal PID calculation.
-     * @param targetVel The target velocity in ticks/second.
-     * @return Calculated power [-0.05, 1.0]
      */
     private double calculatePIDPower(double targetVel) {
         double rawVel = (robot.leftShootMotor.getVelocity() + robot.rightShootMotor.getVelocity()) / 2.0;
-        
-        // Low-Pass Filter on Velocity
         double currentVel = (velFilter * lastVel) + ((1 - velFilter) * rawVel);
         lastVel = currentVel;
 
@@ -76,13 +124,8 @@ public class ShooterMechanism {
         double dt = timer.seconds();
         timer.reset();
 
-        // Proportional (Clipped to prevent excessive reverse acceleration)
         double pPower = Range.clip(error * kP, -0.05, 1.0);
-
-        // Feedforward
         double fPower = targetVel * kF;
-
-        // Derivative (Dampens overshoot)
         double rawDerivative = (dt > 0) ? (error - lastError) / dt : 0;
         double filteredDerivative = (dFilter * lastDerivative) + ((1 - dFilter) * rawDerivative);
         double dPower = filteredDerivative * kD;
@@ -90,7 +133,6 @@ public class ShooterMechanism {
         lastError = error;
         lastDerivative = filteredDerivative;
 
-        // Combine and Clip
         return Range.clip(fPower + pPower + dPower, -0.05, 1.0);
     }
 
@@ -136,19 +178,19 @@ public class ShooterMechanism {
                 break;
 
             case MACRO_SPIN_UP:
-                power = calculatePIDPower(VEL_MACRO);
+                power = calculatePIDPower(currentMacroTarget);
                 robot.leftShootMotor.setPower(power);
                 robot.rightShootMotor.setPower(power);
                 robot.leftGateServo.setPosition(GATE_CLOSED);
                 
-                if (getFlywheelSpeed() >= VEL_MACRO * VEL_THRESHOLD) {
+                if (getFlywheelSpeed() >= currentMacroTarget * VEL_THRESHOLD) {
                     currentState = State.MACRO_GATE_WAIT;
                     stateTimer.reset();
                 }
                 break;
 
             case MACRO_GATE_WAIT:
-                power = calculatePIDPower(VEL_MACRO);
+                power = calculatePIDPower(currentMacroTarget);
                 robot.leftShootMotor.setPower(power);
                 robot.rightShootMotor.setPower(power);
                 robot.leftGateServo.setPosition(GATE_OPEN);
@@ -160,7 +202,7 @@ public class ShooterMechanism {
                 break;
 
             case MACRO_SHOOTING:
-                power = calculatePIDPower(VEL_MACRO);
+                power = calculatePIDPower(currentMacroTarget);
                 robot.leftShootMotor.setPower(power);
                 robot.rightShootMotor.setPower(power);
                 robot.leftGateServo.setPosition(GATE_OPEN);

@@ -2,6 +2,7 @@ package org.firstinspires.ftc.teamcode;
 
 import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
 import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
+import org.firstinspires.ftc.robotcore.external.Telemetry;
 
 @TeleOp(name="Mecanum TeleOp", group="Linear OpMode")
 public class MecanumTeleOp extends LinearOpMode {
@@ -11,10 +12,19 @@ public class MecanumTeleOp extends LinearOpMode {
     // Create a ShooterMechanism object
     ShooterMechanism shooter = new ShooterMechanism(robot);
 
+    // Alliance / Goal Tracking
+    private boolean isRedAlliance = false;
+    private double goalX = 0;
+    private double goalY = 0;
+    private boolean lastL3 = false;
+
     @Override
     public void runOpMode() {
         // Initialize the robot hardware
         robot.init();
+        
+        // Set telemetry to HTML mode to allow colored text
+        telemetry.setDisplayFormat(Telemetry.DisplayFormat.HTML);
 
         // Wait for the game to start (driver presses START)
         waitForStart();
@@ -29,11 +39,34 @@ public class MecanumTeleOp extends LinearOpMode {
             
             robot.driveRobot(axial, lateral, yaw);
 
+            // 1.5 ALLIANCE TOGGLE: L3 switches between Blue (-72,0) and Red (72,0)
+            if (gamepad1.left_stick_button && !lastL3) {
+                isRedAlliance = !isRedAlliance;
+                if (isRedAlliance) {
+                    goalX = 72;
+                    goalY = 0;
+                } else {
+                    goalX = -72;
+                    goalY = 0;
+                }
+            }
+            lastL3 = gamepad1.left_stick_button;
+
             // 2. SHOOTER: Manual (Dpad) or Macro (Circle/B)
             double shooterTargetVel = 0;
+            if (gamepad1.dpad_left) {
+                shooterTargetVel = 400;
+            } else if (gamepad1.dpad_right) {
+                shooterTargetVel = 500;
+            }
+
+            // Calculate distance to goal
+            double dx = goalX - robot.getPosX();
+            double dy = goalY - robot.getPosY();
+            double distanceToGoal = Math.sqrt(dx*dx + dy*dy);
 
             if (gamepad1.b) {
-                shooter.startSequence();
+                shooter.startSequence(distanceToGoal);
             }
 
             // Update shooter PID state machine
@@ -51,6 +84,13 @@ public class MecanumTeleOp extends LinearOpMode {
             robot.updatePinpoint();
 
             // Telemetry
+            if (isRedAlliance) {
+                telemetry.addLine("<font color='#FF0000'>Red Alliance</font>");
+            } else {
+                telemetry.addLine("<font color='#0000FF'>Blue Alliance</font>");
+            }
+            telemetry.addData("Interpolated Vel", "%.0f", shooter.getInterpolatedVelocity(distanceToGoal));
+            telemetry.addData("Distance to Goal", "%.2f in", distanceToGoal);
             telemetry.addData("Status", "Running");
             telemetry.addData("Intake Power", "%.2f", intakePower);
             telemetry.addData("Shooter Target Vel", "%.0f", shooterTargetVel);
